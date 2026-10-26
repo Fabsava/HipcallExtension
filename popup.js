@@ -10,9 +10,34 @@ const els = {
   errorMsg: $("error-msg"), errorAction: $("btn-error-action"),
   data: $("state-data"), chartsWrapper: $("charts-wrapper"), metrics: $("metrics"),
   raw: $("raw-json"), toggle: $("btn-toggle-json"),
+
+  navBtnStats: $("nav-btn-stats"), navBtnScraper: $("nav-btn-scraper"),
+  tabStats: $("tab-content-stats"), tabScraper: $("tab-content-scraper"),
+  btnScrapeSite: $("btn-scrape-site"),
+  scraperLoading: $("scraper-loading"), scraperError: $("scraper-error"),
+  scraperErrorMsg: $("scraper-error-msg"), scraperResults: $("scraper-results"),
+  resDomain: $("res-domain"), resUrl: $("res-url"), resEmail: $("res-email"),
+  resPhone: $("res-phone"), resAddress: $("res-address"),
 };
 
 const show = (el, on) => el.classList.toggle("hidden", !on);
+
+function switchTab(tab) {
+  if (tab === "stats") {
+    els.navBtnStats.classList.add("active");
+    els.navBtnScraper.classList.remove("active");
+    show(els.tabStats, true);
+    show(els.tabScraper, false);
+  } else {
+    els.navBtnScraper.classList.add("active");
+    els.navBtnStats.classList.remove("active");
+    show(els.tabStats, false);
+    show(els.tabScraper, true);
+  }
+}
+
+els.navBtnStats.addEventListener("click", () => switchTab("stats"));
+els.navBtnScraper.addEventListener("click", () => switchTab("scraper"));
 
 async function getStored() {
   const s = await chrome.storage.local.get([C.storageKeys.token, C.storageKeys.userId]);
@@ -250,10 +275,8 @@ function renderMetrics(json) {
     return;
   }
 
-  // Grafik bileşeni
   renderCharts(obj);
 
-  // Tarih ve Saat Dilimi
   if (obj.date) {
     const dateFormatted = formatDate(obj.date);
     const sub = obj.timezone ? `Saat Dilimi: ${obj.timezone}` : null;
@@ -263,7 +286,6 @@ function renderMetrics(json) {
     els.metrics.appendChild(topGrid);
   }
 
-  // Çağrılar
   if (obj.calls && typeof obj.calls === "object") {
     if (obj.calls.inbound) {
       els.metrics.appendChild(createSectionTitle("Gelen Çağrılar (Inbound)"));
@@ -289,7 +311,6 @@ function renderMetrics(json) {
     }
   }
 
-  // Durum Süreleri
   if (obj.states && typeof obj.states === "object") {
     els.metrics.appendChild(createSectionTitle("Günlük Durum Süreleri"));
     const statesGrid = document.createElement("div");
@@ -508,6 +529,232 @@ els.toggle.addEventListener("click", () => {
 });
 
 chrome.runtime.onMessage.addListener((msg) => { if (msg.type === "auth-complete") onAuthResult(msg); });
+
+// ============================================================================
+// AKTİF SİTE BİLGİSİ ÇEKME (DOM & İLETİŞİM SAYFASI SCRAPER)
+// ============================================================================
+
+// Aktif sekmenin içerisinde çalıştırılacak fonksiyon
+async function scrapeSiteDataInTab() {
+  const result = {
+    domain: window.location.hostname.replace(/^www\./i, "") || "-",
+    url: window.location.origin || window.location.href || "-",
+    email: "-",
+    phone: "-",
+    address: "-",
+  };
+
+  function scanDoc(doc) {
+    const emails = new Set();
+    const phones = new Set();
+    let foundAddress = null;
+
+    // 1. Mailto Linkleri
+    doc.querySelectorAll('a[href^="mailto:"]').forEach((a) => {
+      const email = a.href.replace(/^mailto:/i, "").split("?")[0].trim();
+      if (email && email.includes("@")) emails.add(email);
+    });
+
+    // 2. Tel Linkleri
+    doc.querySelectorAll('a[href^="tel:"]').forEach((a) => {
+      const phone = a.href.replace(/^tel:/i, "").trim();
+      if (phone && phone.length >= 7) phones.add(phone);
+    });
+
+    // 3. Schema.org / JSON-LD
+    doc.querySelectorAll('script[type="application/ld+json"]').forEach((script) => {
+      try {
+        const json = JSON.parse(script.textContent);
+        const findInJson = (obj) => {
+          if (!obj || typeof obj !== "object") return;
+          if (obj.email && typeof obj.email === "string") emails.add(obj.email);
+          if (obj.telephone && typeof obj.telephone === "string") phones.add(obj.telephone);
+          if (obj.address) {
+            if (typeof obj.address === "string") foundAddress = obj.address;
+            else if (typeof obj.address === "object") {
+              const parts = [
+                obj.address.streetAddress,
+                obj.address.addressLocality,
+                obj.address.addressRegion,
+                obj.address.postalCode,
+                obj.address.addressCountry,
+              ].filter(Boolean);
+              if (parts.length > 0) foundAddress = parts.join(", ");
+            }
+          }
+          Object.values(obj).forEach(findInJson);
+        };
+        findInJson(json);
+      } catch (_) {}
+    });
+
+    // 4. HTML5 Address ve Microdata
+    if (!foundAddress) {
+      const addrEl = doc.querySelector("address") || doc.querySelector('[itemprop="address"]');
+      if (addrEl) {
+        const txt = addrEl.innerText.trim().replace(/\s+/g, " ");
+        if (txt.length >= 10 && txt.length < 300) foundAddress = txt;
+      }
+    }
+
+    const bodyText = doc.body ? doc.body.innerText : "";
+
+    // 5. Metin İçi E-posta Taraması (Regex)
+    if (emails.size === 0 && bodyText) {
+      const matches = bodyText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+      if (matches) {
+        matches.forEach((em) => {
+          if (!/\.(png|jpg|jpeg|gif|webp|svg|css|js|woff|woff2)$/i.test(em)) {
+            emails.add(em);
+          }
+        });
+      }
+    }
+
+    // 6. Metin İçi Telefon Taraması (TR ve Uluslararası Regex)
+    if (phones.size === 0 && bodyText) {
+      const phoneMatches = bodyText.match(/(?:\+?90|0)?\s*\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}/g);
+      if (phoneMatches) {
+        phoneMatches.forEach((ph) => {
+          const clean = ph.trim();
+          const digits = clean.replace(/\D/g, "");
+          if (digits.length >= 10 && digits.length <= 13) {
+            phones.add(clean);
+          }
+        });
+      }
+      if (phones.size === 0) {
+        const genericMatches = bodyText.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{2,4}/g);
+        if (genericMatches) {
+          genericMatches.forEach((ph) => {
+            const clean = ph.trim();
+            const digits = clean.replace(/\D/g, "");
+            if (digits.length >= 10 && digits.length <= 14 && !/^\d{4}[-.]\d{2}[-.]\d{2}$/.test(clean)) {
+              phones.add(clean);
+            }
+          });
+        }
+      }
+    }
+
+    // 7. Footer ve Metin İçi Adres Taraması
+    if (!foundAddress) {
+      const footer = doc.querySelector("footer") || doc.querySelector("#footer") || doc.querySelector(".footer");
+      const targetText = footer ? footer.innerText : bodyText;
+      const addrMatch = targetText.match(/(?:adres|address)\s*[:：\-]\s*([^\n\r]{12,180})/i);
+      if (addrMatch && addrMatch[1]) {
+        foundAddress = addrMatch[1].trim();
+      }
+    }
+
+    return {
+      emails: Array.from(emails),
+      phones: Array.from(phones),
+      address: foundAddress,
+    };
+  }
+
+  let scan = scanDoc(document);
+
+  // Sayfada bulunamayan bilgi varsa İletişim / Hakkında sayfasına bak
+  if (scan.emails.length === 0 || scan.phones.length === 0 || !scan.address) {
+    const contactLinks = Array.from(document.querySelectorAll("a[href]")).filter((a) => {
+      const href = a.getAttribute("href") || "";
+      const text = a.textContent.toLowerCase();
+      return (
+        /iletisim|contact|bize-ulasin|ulasim|about|hakkimizda/i.test(href) ||
+        /iletişim|contact|bize ulaşın|ulaşım|hakkımızda/i.test(text)
+      );
+    });
+
+    if (contactLinks.length > 0) {
+      const contactUrl = contactLinks[0].href;
+      if (contactUrl.startsWith(window.location.origin)) {
+        try {
+          const resp = await fetch(contactUrl);
+          if (resp.ok) {
+            const html = await resp.text();
+            const parser = new DOMParser();
+            const contactDoc = parser.parseFromString(html, "text/html");
+            const contactScan = scanDoc(contactDoc);
+
+            if (scan.emails.length === 0 && contactScan.emails.length > 0) scan.emails = contactScan.emails;
+            if (scan.phones.length === 0 && contactScan.phones.length > 0) scan.phones = contactScan.phones;
+            if (!scan.address && contactScan.address) scan.address = contactScan.address;
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  result.email = scan.emails.length > 0 ? scan.emails[0] : "-";
+  result.phone = scan.phones.length > 0 ? scan.phones[0] : "-";
+  result.address = scan.address ? scan.address : "-";
+
+  return result;
+}
+
+els.btnScrapeSite.addEventListener("click", async () => {
+  show(els.scraperError, false);
+  show(els.scraperResults, false);
+  show(els.scraperLoading, true);
+  els.btnScrapeSite.disabled = true;
+
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!activeTab || !activeTab.id) {
+      throw new Error("Aktif sekme bulunamadı.");
+    }
+    if (!activeTab.url || activeTab.url.startsWith("chrome://") || activeTab.url.startsWith("edge://") || activeTab.url.startsWith("about:")) {
+      throw new Error("Tarayıcı içi sistem sayfalarında (chrome:// vb.) bilgi taranamıyor. Lütfen normal bir web sitesini açıp deneyin.");
+    }
+
+    const execResults = await chrome.scripting.executeScript({
+      target: { tabId: activeTab.id },
+      func: scrapeSiteDataInTab,
+    });
+
+    const data = execResults?.[0]?.result;
+    if (!data) {
+      throw new Error("Siteden bilgi okunamadı veya sayfa yüklenmesi tamamlanmadı.");
+    }
+
+    els.resDomain.textContent = data.domain || "-";
+    els.resUrl.textContent = data.url || "-";
+    els.resEmail.textContent = data.email || "-";
+    els.resPhone.textContent = data.phone || "-";
+    els.resAddress.textContent = data.address || "-";
+
+    show(els.scraperResults, true);
+  } catch (err) {
+    els.scraperErrorMsg.textContent = err.message || "Bilinmeyen tarama hatası.";
+    show(els.scraperError, true);
+  } finally {
+    show(els.scraperLoading, false);
+    els.btnScrapeSite.disabled = false;
+  }
+});
+
+// Kopyala butonları
+document.querySelectorAll(".btn-copy").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const targetId = btn.getAttribute("data-target");
+    const targetEl = document.getElementById(targetId);
+    if (!targetEl) return;
+    const text = targetEl.textContent.trim();
+    if (text === "-" || text === "—") return;
+
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = "✓";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.classList.remove("copied");
+      }, 1500);
+    });
+  });
+});
 
 (async function init() {
   const { hipcall_auth_result: last } = await chrome.storage.local.get("hipcall_auth_result");

@@ -41,6 +41,21 @@ h2 { font-size: 15px; margin-bottom: 6px; }
 .pill-on i { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .pill-off i { background: var(--muted); }
 
+.nav-tabs {
+  display: flex; gap: 6px; margin-bottom: 12px;
+  background: rgba(28, 35, 51, .6); padding: 4px; border-radius: 10px; border: 1px solid var(--border);
+}
+.nav-tab {
+  flex: 1; padding: 7px 10px; font-size: 12px; font-weight: 600;
+  border-radius: 7px; border: 1px solid transparent; background: transparent;
+  color: var(--muted); cursor: pointer; transition: all .15s ease;
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active {
+  background: var(--card); color: var(--accent); border-color: var(--border);
+  box-shadow: 0 2px 6px rgba(0,0,0,.3);
+}
+
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
 .card.center { text-align: center; padding: 26px 18px; }
 .card.center p { margin-bottom: 16px; line-height: 1.5; }
@@ -183,6 +198,32 @@ h2 { font-size: 15px; margin-bottom: 6px; }
 .metric.highlight .v { font-size: 16px; color: var(--text); }
 
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.scrape-item-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 8px; transition: border-color .15s;
+  animation: fade .25s ease both;
+}
+.scrape-item-card:hover { border-color: var(--accent); }
+.scrape-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.scrape-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 3px;
+}
+.scrape-val {
+  font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 600;
+  color: var(--accent); word-break: break-all;
+}
+.btn-copy {
+  background: transparent; border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 9px; color: var(--text); cursor: pointer; font-size: 12px; transition: all .15s; flex-shrink: 0;
+}
+.btn-copy:hover {
+  background: rgba(88, 166, 255, .15); border-color: var(--accent); color: var(--accent);
+}
+.btn-copy.copied {
+  background: rgba(63, 185, 80, .2); border-color: var(--ok); color: var(--ok);
+}
 
 .raw { padding: 0; overflow: hidden; margin-top: 14px; }
 .raw-toggle {

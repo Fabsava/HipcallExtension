@@ -1,111 +1,76 @@
-# 📞 Hipcall Today Stats — Chrome Eklentisi (Manifest V3)
+# Hipcall Today Stats & Site Inspector (Chrome Eklentisi - Manifest V3)
 
-Modern, güvenli ve hafif bir Google Chrome eklentisi. **Hipcall OAuth 2.0 (PKCE)** yetkilendirme akışını kullanarak kullanıcı hesabına bağlanır ve kullanıcının günlük istatistiklerini (`TODAY stats`) şık bir karanlık tema arayüzünde görüntüler.
+Hipcall OAuth 2.0 PKCE akışını kullanarak kullanıcı hesabına bağlanan, günlük istatistikleri (`/api/v3/users/{user_id}/stats/today`) grafik ve metriklerle görüntüleyen ve aktif açık olan web sitelerinden iletişim/iletişim bilgilerini (domain, URL, e-posta, telefon, adres) tarayan Chrome eklentisidir.
 
----
+## Özellikler
 
-## 🚀 Öne Çıkan Özellikler
+* **Manifest V3 Mimarisi:** Service Worker ve activeTab / scripting izinleri ile güncel Chrome standartlarına tam uyumluluk.
+* **OAuth 2.0 PKCE (RFC 7636):** S256 kriptografik doğrulama ile istemci tarafında secret tutmadan güvenli giriş.
+* **Otomatik Callback & Oturum Yönetimi:** Yönlendirme sekmesini otomatik kapatma, `chrome.storage.local` üzerinde saklama ve proaktif/reaktif token yenileme (refresh token).
+* **Zaman Dağılımı Grafiği:** Günün 24 saatlik durum dağılımını gösteren dairesel halka (SVG Donut) ve yatay zaman çubuğu.
+* **Formatlanmış Veri Görünümü:** Türkçe tarih biçimlendirme, saniyeleri saat/dakikaya çevirme ve gelen/giden çağrı metrikleri.
+* **Aktif Site Dedektifi (Web Scraper):** O an açık olan sekmedeki domain, temel URL, mailto/tel linkleri, Schema.org JSON-LD verileri, footer ve iletişim sayfalarını tarayarak e-posta, telefon ve adres bilgilerini tek tıkla çıkarma ve panoya kopyalama.
+* **Sıfır Bağımlılık:** Vanilla HTML5, CSS3 ve JavaScript ile doğrudan çalışır; build adımı gerektirmez.
 
-* **Manifest V3 Mimarisi:** Güncel Chrome uzantı standartlarına tam uyumlu Service Worker yapısı.
-* **OAuth 2.0 + PKCE (RFC 7636):** İstemci tarafında `client_secret` ifşa etme riskini ortadan kaldıran, kriptografik doğrulamalı en güncel güvenlik standardı (`S256`).
-* **Otomatik Callback & Sekme Yönetimi:** Giriş onaylandığında callback URL'i arka planda yakalanır, geçici auth kodu token ile takas edilir ve açık olan yetkilendirme sekmesi otomatik olarak kapatılır.
-* **Token Saklama & Session Yönetimi:** Alınan `access_token` ve `refresh_token` güvenli şekilde `chrome.storage.local` üzerinde saklanır; 401 yetki hatası durumunda otomatik token yenileme denenir.
-* **Dinamik user_id Yönetimi:** `user_id` değeri profil endpoint'lerinden otomatik keşfedilir veya popup üzerinden elle girilip yerel hafızaya kaydedilebilir.
-* **Sıfır Bağımlılık & Derleme:** Ekstra `npm install` veya `webpack/vite` build adımı gerektirmez. Vanilla HTML5, CSS3 ve JavaScript ile doğrudan çalışır.
-
----
-
-## 📁 Proje Dosya Yapısı
+## Dosya Yapısı
 
 ```text
 HipcallExtension/
-├── manifest.json       # Eklenti izinleri, metadata ve Service Worker tanımı
-├── config.js           # API URL'leri, OAuth parametreleri ve token fonksiyonları
+├── manifest.json       # Eklenti izinleri ve Service Worker tanımı
+├── config.js           # API parametreleri ve token fonksiyonları
 ├── background.js       # PKCE üretimi, sekme/callback dinleyicisi ve Service Worker
-├── popup.html          # Giriş ve istatistik ekranlarının HTML yapısı
-├── popup.css           # Koyu tema, metrik grid ve responsive stiller
-├── popup.js            # Durum yönetimi, API istekleri ve DOM etkileşimleri
-└── README.md           # Proje tanıtım ve kurulum dokümantasyonu
+├── popup.html          # İstatistikler ve Site Bilgisi sekmelerinin HTML yapısı
+├── popup.css           # Arayüz stilleri, grafikler ve scraper kartları
+├── popup.js            # Durum yönetimi, grafik render, DOM scraper ve kopyalama mantığı
+└── README.md           # Proje dokümantasyonu
 ```
 
----
-
-## 🔄 OAuth 2.0 + PKCE Çalışma Akışı
+## OAuth 2.0 + PKCE Akışı
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as Kullanıcı
-    participant Popup as Eklenti Popup (UI)
+    participant Popup as Eklenti Popup
     participant SW as Service Worker (background.js)
     participant Hipcall as Hipcall OAuth Sunucusu
-    participant Redirect as Callback Adresi (ngrok)
+    participant Redirect as Callback Adresi
 
-    User->>Popup: "Hipcall ile Giriş Yap" butonuna tıklar
+    User->>Popup: Giriş butonuna tıklar
     Popup->>SW: login mesajı gönderir
-    SW->>SW: code_verifier & code_challenge (S256) üretir
+    SW->>SW: code_verifier ve code_challenge üretir
     SW->>Hipcall: Yetkilendirme sekmesini açar (/oauth/authorize)
-    User->>Hipcall: İzinleri onaylar
-    Hipcall->>Redirect: code ile callback URL'e yönlendirir
-    SW->>SW: chrome.tabs.onUpdated ile URL'deki code'u havada yakalar
+    User->>Hipcall: Onay verir
+    Hipcall->>Redirect: code parametresiyle yönlendirir
+    SW->>SW: chrome.tabs.onUpdated ile URL'deki kodu yakalar
     SW->>Redirect: Yetkilendirme sekmesini kapatır
     SW->>Hipcall: POST /oauth/token (code + code_verifier)
-    Hipcall-->>SW: access_token (+ refresh_token) döner
+    Hipcall-->>SW: access_token döner
     SW->>SW: Token'ı chrome.storage.local'a yazar
     SW->>Popup: auth-complete bildirimi gönderir
     Popup->>Hipcall: GET /api/v3/users/{user_id}/stats/today
-    Hipcall-->>Popup: Günlük istatistik verisi (JSON)
-    Popup->>User: Metrik kartları ve JSON'ı ekrana basar
+    Hipcall-->>Popup: İstatistik verisi (JSON)
+    Popup->>User: Metrik kartları ve grafik ekrana basılır
 ```
 
----
+## Kurulum
 
-## 🛠️ Kurulum Adımları
-
-Eklentiyi herhangi bir Chrome tabanlı tarayıcıda (Google Chrome, Brave, Edge vb.) çalıştırmak için:
-
-1. Bu projeyi bilgisayarınıza indirin veya klonlayın:
+1. Depoyu klonlayın:
    ```bash
    git clone <REPO_URL>
    ```
 
-2. Tarayıcınızın adres çubuğuna şunu yazın ve Enter'a basın:
-   ```text
-   chrome://extensions
-   ```
+2. `config.js` dosyasındaki ilgili alanları doldurun:
+   * `clientId`: Hipcall yönetim panelinden alınan Client ID
+   * `redirectUri`: Yetkilendirme sonrası dönülecek callback adresi
 
-3. Sağ üst köşedeki **"Geliştirici modu" (Developer mode)** anahtarını aktif hale getirin.
+3. Chrome tarayıcısında `chrome://extensions` adresini açın.
 
-4. Sol üstte beliren **"Paketlenmemiş öğe yükle" (Load unpacked)** butonuna tıklayın.
+4. "Geliştirici modu"nu aktif edin.
 
-5. Açılan pencerede bu projenin bulunduğu `HipcallExtension` klasörünü seçin.
+5. "Paketlenmemiş öğe yükle" butonuna tıklayarak `HipcallExtension` klasörünü seçin.
 
-6. Eklenti simgesine tıklayarak popup'ı açın ve **"Hipcall ile Giriş Yap"** butonuyla test edin.
+## Kullanım
 
----
-
-## ⚙️ Yapılandırma (`config.js`)
-
-OAuth ve API parametreleri `config.js` dosyası üzerinden kolayca yönetilebilir:
-
-| Değişken | Açıklama |
-| :--- | :--- |
-| `baseUrl` | Hipcall API ana adresi (`https://use.hipcall.com.tr`) |
-| `authorizeUrl` | OAuth 2.0 izin sayfası URL'i |
-| `clientId` | Hipcall Uygulama Yönetiminden alınan Client ID |
-| `redirectUri` | Yetkilendirme sonrası dönülecek callback adresi |
-| `scope` | Talep edilen izinler (`profile email offline_access contacts:read`) |
-| `state` | CSRF koruması için güvenlik anahtarı (`staj123`) |
-| `usePKCE` | PKCE doğrulamasının aktifliği (`true`) |
-| `tokenExchangeUrl` | Auth kodunun token'a dönüştürüleceği uç nokta |
-| `statsPath` | Günlük istatistik endpoint şablonu (`/api/v3/users/{id}/stats/today`) |
-
----
-
-## 🛡️ Neden PKCE Tercih Edildi?
-
-Geleneksel OAuth2 Authorization Code akışında, istemcinin sunucuya gizli bir `client_secret` anahtarı göndermesi beklenir. Ancak **Chrome eklentileri istemci tarafında (Client-Side) çalışan açık kodlu uygulamalardır**.
-
-* Bir eklentiye gömülen `client_secret`, uzantıyı indiren herkes tarafından düz metin olarak okunabilir.
-* **PKCE (RFC 7636)** standardı sayesinde her oturum açılışında anlık dinamik bir şifreleme anahtarı (`code_verifier`) üretilir ve bu anahtarın SHA-256 hash'i (`code_challenge`) sunucuya gönderilir.
-* Token takasında sunucu bu anahtarı doğrular. Böylece **hiçbir gizli anahtarı eklenti koduna yazmadan** en üst düzeyde güvenlik sağlanmış olur.
+* **İstatistikler Sekmesi:** Hipcall hesabınıza giriş yaparak günlük çağrı, müsaitlik ve durum sürelerinizi hem grafiksel hem de kartlar halinde inceleyin.
+* **Site Bilgisi Çek Sekmesi:** Herhangi bir web sitesinde (örn. bir e-ticaret veya kurumsal site) gezinirken eklentiyi açın ve "Açık Siteden Bilgileri Çek" butonuna basın. Eklenti sayfayı, footer'ı ve iletişim sayfalarını tarayarak domain, temel URL, e-posta, telefon ve adres bilgilerini listeler.

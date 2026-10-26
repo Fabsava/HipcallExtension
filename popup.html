@@ -14,57 +14,121 @@
     <div class="logo">H</div>
     <div>
       <h1>Hipcall</h1>
-      <p class="sub">Today Stats</p>
+      <p class="sub">Today Stats & Site Tools</p>
     </div>
     <span id="status-pill" class="pill pill-off"><i></i><span id="status-text">Bağlı değil</span></span>
   </header>
 
-  <main id="view-login" class="view hidden">
-    <section class="card center">
-      <h2>Hoş geldiniz</h2>
-      <p class="muted">Günlük istatistiklerinizi görmek için Hipcall hesabınızla giriş yapın.</p>
-      <div id="login-error" class="alert alert-error hidden"></div>
-      <button id="btn-login" class="btn btn-primary btn-lg">Hipcall ile Giriş Yap</button>
-      <p id="login-waiting" class="muted small hidden">Yetkilendirme sekmesi bekleniyor…</p>
-    </section>
-  </main>
+  <nav class="nav-tabs">
+    <button id="nav-btn-stats" class="nav-tab active">📊 İstatistikler</button>
+    <button id="nav-btn-scraper" class="nav-tab">🌐 Site Bilgisi Çek</button>
+  </nav>
 
-  <main id="view-app" class="view hidden">
-    <section class="card toolbar">
-      <div class="user-badge">
-        <span class="user-icon">👤</span>
-        <span id="user-display" class="user-id-text">Kullanıcı #---</span>
+  <section id="tab-content-stats">
+    <main id="view-login" class="view hidden">
+      <section class="card center">
+        <h2>Hoş geldiniz</h2>
+        <p class="muted">Günlük istatistiklerinizi görmek için Hipcall hesabınızla giriş yapın.</p>
+        <div id="login-error" class="alert alert-error hidden"></div>
+        <button id="btn-login" class="btn btn-primary btn-lg">Hipcall ile Giriş Yap</button>
+        <p id="login-waiting" class="muted small hidden">Yetkilendirme sekmesi bekleniyor…</p>
+      </section>
+    </main>
+
+    <main id="view-app" class="view hidden">
+      <section class="card toolbar">
+        <div class="user-badge">
+          <span class="user-icon">👤</span>
+          <span id="user-display" class="user-id-text">Kullanıcı #---</span>
+        </div>
+        <div class="toolbar-actions">
+          <button id="btn-refresh" class="btn btn-primary">Yenile</button>
+          <button id="btn-logout" class="btn btn-ghost">Çıkış Yap</button>
+        </div>
+      </section>
+
+      <div id="state-loading" class="state hidden"><div class="spinner"></div><p class="muted">Yükleniyor…</p></div>
+
+      <div id="state-error" class="alert alert-error hidden">
+        <strong id="error-title">Hata</strong>
+        <p id="error-msg"></p>
+        <button id="btn-error-action" class="btn btn-ghost btn-sm hidden">Oturumu sıfırla</button>
       </div>
-      <div class="toolbar-actions">
-        <button id="btn-refresh" class="btn btn-primary">Yenile</button>
-        <button id="btn-logout" class="btn btn-ghost">Çıkış Yap</button>
+
+      <section id="state-data" class="hidden">
+        <div id="charts-wrapper" class="card chart-card"></div>
+        <div id="metrics"></div>
+        <div class="card raw">
+          <button id="btn-toggle-json" class="raw-toggle" aria-expanded="false">
+            <span class="chev">▸</span> Raw JSON
+          </button>
+          <pre id="raw-json" class="hidden"></pre>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <section id="tab-content-scraper" class="hidden">
+    <section class="card">
+      <div style="margin-bottom: 12px;">
+        <h2>Aktif Site Dedektifi</h2>
+        <p class="muted small">Açık olan aktif sekmedeki domain, temel URL, e-posta, telefon ve adres bilgilerini otomatik bulur.</p>
       </div>
+      <button id="btn-scrape-site" class="btn btn-primary btn-lg">🔍 Açık Siteden Bilgileri Çek</button>
     </section>
 
-    <div id="state-loading" class="state hidden"><div class="spinner"></div><p class="muted">Yükleniyor…</p></div>
-
-    <div id="state-error" class="alert alert-error hidden">
-      <strong id="error-title">Hata</strong>
-      <p id="error-msg"></p>
-      <button id="btn-error-action" class="btn btn-ghost btn-sm hidden">Oturumu sıfırla</button>
+    <div id="scraper-loading" class="state hidden">
+      <div class="spinner"></div>
+      <p class="muted">Sayfa taranıyor, footer ve iletişim sayfası araştırılıyor…</p>
     </div>
 
-    <section id="state-data" class="hidden">
-      <!-- Grafik Alanı -->
-      <div id="charts-wrapper" class="card chart-card"></div>
+    <div id="scraper-error" class="alert alert-error hidden">
+      <strong>Hata</strong>
+      <p id="scraper-error-msg"></p>
+    </div>
 
-      <!-- Metrik Kartları -->
-      <div id="metrics"></div>
+    <section id="scraper-results" class="hidden">
+      <div class="scrape-item-card">
+        <div class="scrape-info">
+          <span class="scrape-label">Domain Adı</span>
+          <span id="res-domain" class="scrape-val">—</span>
+        </div>
+        <button class="btn-copy" data-target="res-domain" title="Kopyala">📋</button>
+      </div>
 
-      <!-- Raw JSON -->
-      <div class="card raw">
-        <button id="btn-toggle-json" class="raw-toggle" aria-expanded="false">
-          <span class="chev">▸</span> Raw JSON
-        </button>
-        <pre id="raw-json" class="hidden"></pre>
+      <div class="scrape-item-card">
+        <div class="scrape-info">
+          <span class="scrape-label">Temel URL</span>
+          <span id="res-url" class="scrape-val">—</span>
+        </div>
+        <button class="btn-copy" data-target="res-url" title="Kopyala">📋</button>
+      </div>
+
+      <div class="scrape-item-card">
+        <div class="scrape-info">
+          <span class="scrape-label">E-posta</span>
+          <span id="res-email" class="scrape-val">—</span>
+        </div>
+        <button class="btn-copy" data-target="res-email" title="Kopyala">📋</button>
+      </div>
+
+      <div class="scrape-item-card">
+        <div class="scrape-info">
+          <span class="scrape-label">Telefon</span>
+          <span id="res-phone" class="scrape-val">—</span>
+        </div>
+        <button class="btn-copy" data-target="res-phone" title="Kopyala">📋</button>
+      </div>
+
+      <div class="scrape-item-card">
+        <div class="scrape-info">
+          <span class="scrape-label">Adres</span>
+          <span id="res-address" class="scrape-val">—</span>
+        </div>
+        <button class="btn-copy" data-target="res-address" title="Kopyala">📋</button>
       </div>
     </section>
-  </main>
+  </section>
 
   <script src="config.js"></script>
   <script src="popup.js"></script>
