@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hipcall Today Stats</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="brand">
+    <div class="logo">H</div>
+    <div>
+      <h1>Hipcall</h1>
+      <p class="sub">Today Stats</p>
+    </div>
+    <span id="status-pill" class="pill pill-off"><i></i><span id="status-text">Bağlı değil</span></span>
+  </header>
+
+  <main id="view-login" class="view hidden">
+    <section class="card center">
+      <h2>Hoş geldiniz</h2>
+      <p class="muted">Günlük istatistiklerinizi görmek için Hipcall hesabınızla giriş yapın.</p>
+      <div id="login-error" class="alert alert-error hidden"></div>
+      <button id="btn-login" class="btn btn-primary btn-lg">Hipcall ile Giriş Yap</button>
+      <p id="login-waiting" class="muted small hidden">Yetkilendirme sekmesi bekleniyor…</p>
+    </section>
+  </main>
+
+  <main id="view-app" class="view hidden">
+    <section class="card toolbar">
+      <div class="field">
+        <label for="input-user-id">user_id</label>
+        <input id="input-user-id" type="text" placeholder="örn. 12345" autocomplete="off" spellcheck="false" />
+      </div>
+      <button id="btn-refresh" class="btn btn-primary">Yenile</button>
+      <button id="btn-logout" class="btn btn-ghost">Çıkış Yap</button>
+    </section>
+
+    <div id="state-loading" class="state hidden"><div class="spinner"></div><p class="muted">Yükleniyor…</p></div>
+
+    <div id="state-error" class="alert alert-error hidden">
+      <strong id="error-title">Hata</strong>
+      <p id="error-msg"></p>
+      <button id="btn-error-action" class="btn btn-ghost btn-sm hidden">Oturumu sıfırla</button>
+    </div>
+
+    <section id="state-data" class="hidden">
+      <div id="metrics" class="grid"></div>
+      <div class="card raw">
+        <button id="btn-toggle-json" class="raw-toggle" aria-expanded="false">
+          <span class="chev">▸</span> Raw JSON
+        </button>
+        <pre id="raw-json" class="hidden"></pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Hipcall Today Stats",
+  "version": "1.0.0",
+  "description": "Hipcall OAuth2 ile giriş yapıp günlük istatistikleri görüntüleyen Chrome eklentisi.",
+  "permissions": ["storage", "identity", "tabs"],
+  "host_permissions": [
+    "https://use.hipcall.com.tr/*",
+    "https://*.ngrok-free.dev/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Hipcall Stats",
+    "default_popup": "popup.html"
+  }
+}
