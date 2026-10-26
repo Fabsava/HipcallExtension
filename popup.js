@@ -8,7 +8,8 @@ const els = {
   userDisplay: $("user-display"), btnRefresh: $("btn-refresh"), btnLogout: $("btn-logout"),
   loading: $("state-loading"), error: $("state-error"), errorTitle: $("error-title"),
   errorMsg: $("error-msg"), errorAction: $("btn-error-action"),
-  data: $("state-data"), metrics: $("metrics"), raw: $("raw-json"), toggle: $("btn-toggle-json"),
+  data: $("state-data"), chartsWrapper: $("charts-wrapper"), metrics: $("metrics"),
+  raw: $("raw-json"), toggle: $("btn-toggle-json"),
 };
 
 const show = (el, on) => el.classList.toggle("hidden", !on);
@@ -70,6 +71,148 @@ function formatDate(dateStr) {
   }
 }
 
+function syntaxHighlightJson(json) {
+  let str = typeof json !== "string" ? JSON.stringify(json, null, 2) : json;
+  str = str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return str.replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    function (match) {
+      let cls = "json-num";
+      if (/^"/.test(match)) {
+        cls = /:$/.test(match) ? "json-key" : "json-str";
+      } else if (/true|false/.test(match)) {
+        cls = "json-bool";
+      } else if (/null/.test(match)) {
+        cls = "json-null";
+      }
+      return '<span class="' + cls + '">' + match + "</span>";
+    }
+  );
+}
+
+function renderCharts(obj) {
+  els.chartsWrapper.innerHTML = "";
+  if (!obj || !obj.states || typeof obj.states !== "object") {
+    show(els.chartsWrapper, false);
+    return;
+  }
+  show(els.chartsWrapper, true);
+
+  const states = obj.states;
+  const stateConfig = [
+    { key: "time_to_available", label: "Müsait", color: "#3fb950" },
+    { key: "time_to_remain", label: "Kalan", color: "#484f58" },
+    { key: "time_to_busy", label: "Meşgul", color: "#f85149" },
+    { key: "time_to_break", label: "Mola", color: "#d29922" },
+    { key: "time_to_away", label: "Dışarıda", color: "#a371f7" },
+    { key: "time_to_unknown", label: "Bilinmeyen", color: "#6e7681" },
+  ];
+
+  let totalSec = Object.values(states).reduce((acc, v) => acc + (Number(v) || 0), 0);
+  if (totalSec <= 0) totalSec = 86400;
+
+  const items = [];
+  stateConfig.forEach((cfg) => {
+    const val = Number(states[cfg.key]) || 0;
+    const pct = (val / totalSec) * 100;
+    items.push({ ...cfg, val, pct });
+  });
+
+  const header = document.createElement("div");
+  header.className = "chart-header";
+  header.innerHTML = `<span>GÜNLÜK ZAMAN DAĞILIMI</span><span>${Math.round(totalSec / 3600)} SAAT</span>`;
+  els.chartsWrapper.appendChild(header);
+
+  const body = document.createElement("div");
+  body.className = "chart-body";
+
+  const r = 38;
+  const c = 2 * Math.PI * r;
+  let accumulated = 0;
+
+  const donutBox = document.createElement("div");
+  donutBox.className = "donut-box";
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("class", "donut-svg");
+
+  const bgCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  bgCircle.setAttribute("cx", "50");
+  bgCircle.setAttribute("cy", "50");
+  bgCircle.setAttribute("r", String(r));
+  bgCircle.setAttribute("fill", "transparent");
+  bgCircle.setAttribute("stroke", "#21262d");
+  bgCircle.setAttribute("stroke-width", "12");
+  svg.appendChild(bgCircle);
+
+  items.forEach((item) => {
+    if (item.val <= 0) return;
+    const strokeDash = (item.pct / 100) * c;
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", "50");
+    circle.setAttribute("cy", "50");
+    circle.setAttribute("r", String(r));
+    circle.setAttribute("fill", "transparent");
+    circle.setAttribute("stroke", item.color);
+    circle.setAttribute("stroke-width", "12");
+    circle.setAttribute("stroke-dasharray", `${strokeDash} ${c}`);
+    circle.setAttribute("stroke-dashoffset", String(-accumulated));
+    svg.appendChild(circle);
+    accumulated += strokeDash;
+  });
+  donutBox.appendChild(svg);
+
+  const availSec = Number(states.time_to_available) || 0;
+  const availHrs = (availSec / 3600).toFixed(1);
+  const center = document.createElement("div");
+  center.className = "donut-center";
+  center.innerHTML = `<span class="donut-center-val">${availHrs} sa</span><span class="donut-center-lbl">Müsait</span>`;
+  donutBox.appendChild(center);
+  body.appendChild(donutBox);
+
+  const legend = document.createElement("div");
+  legend.className = "chart-legend";
+  items.forEach((item) => {
+    if (item.val <= 0 && item.key !== "time_to_available" && item.key !== "time_to_remain") return;
+    const dur = formatDuration(item.val);
+    const div = document.createElement("div");
+    div.className = "legend-item";
+    div.innerHTML = `
+      <div class="legend-left">
+        <span class="legend-dot" style="background:${item.color}"></span>
+        <span class="legend-name">${item.label}</span>
+      </div>
+      <span class="legend-val">${dur.text} (%${item.pct.toFixed(0)})</span>
+    `;
+    legend.appendChild(div);
+  });
+  body.appendChild(legend);
+  els.chartsWrapper.appendChild(body);
+
+  const timelineWrap = document.createElement("div");
+  timelineWrap.className = "timeline-wrap";
+  timelineWrap.innerHTML = `
+    <div class="timeline-title">
+      <span>Zaman Çubuğu Dağılımı</span>
+      <span>00:00 - 24:00</span>
+    </div>
+  `;
+  const bar = document.createElement("div");
+  bar.className = "timeline-bar";
+  items.forEach((item) => {
+    if (item.pct <= 0) return;
+    const seg = document.createElement("div");
+    seg.className = "timeline-segment";
+    seg.style.width = `${item.pct}%`;
+    seg.style.backgroundColor = item.color;
+    seg.title = `${item.label}: ${item.pct.toFixed(1)}%`;
+    bar.appendChild(seg);
+  });
+  timelineWrap.appendChild(bar);
+  els.chartsWrapper.appendChild(timelineWrap);
+}
+
 function createCard(title, mainVal, subVal = null, wide = false, highlight = false) {
   const card = document.createElement("div");
   card.className = "metric" + (wide ? " wide" : "") + (highlight ? " highlight" : "");
@@ -107,7 +250,10 @@ function renderMetrics(json) {
     return;
   }
 
-  // 1. Tarih ve Saat Dilimi
+  // Grafik bileşeni
+  renderCharts(obj);
+
+  // Tarih ve Saat Dilimi
   if (obj.date) {
     const dateFormatted = formatDate(obj.date);
     const sub = obj.timezone ? `Saat Dilimi: ${obj.timezone}` : null;
@@ -117,7 +263,7 @@ function renderMetrics(json) {
     els.metrics.appendChild(topGrid);
   }
 
-  // 2. Çağrılar (Calls)
+  // Çağrılar
   if (obj.calls && typeof obj.calls === "object") {
     if (obj.calls.inbound) {
       els.metrics.appendChild(createSectionTitle("Gelen Çağrılar (Inbound)"));
@@ -143,7 +289,7 @@ function renderMetrics(json) {
     }
   }
 
-  // 3. Durum Süreleri (States)
+  // Durum Süreleri
   if (obj.states && typeof obj.states === "object") {
     els.metrics.appendChild(createSectionTitle("Günlük Durum Süreleri"));
     const statesGrid = document.createElement("div");
@@ -175,7 +321,6 @@ function renderMetrics(json) {
     els.metrics.appendChild(statesGrid);
   }
 
-  // 4. Diğer özel alanlar varsa ekle
   const handledKeys = new Set(["date", "timezone", "calls", "states", "user_id"]);
   const extraKeys = Object.entries(obj).filter(([k]) => !handledKeys.has(k));
   if (extraKeys.length > 0) {
@@ -257,7 +402,6 @@ async function loadStats() {
       return;
     }
 
-    // Proaktif Token Yenileme (süresi dolmuşsa veya 60 saniyeden az kalmışsa)
     if (token.expires_at && Date.now() > token.expires_at - 60000 && token.refresh_token) {
       const r = await chrome.runtime.sendMessage({ type: "refresh-token" });
       if (r?.ok) {
@@ -270,7 +414,6 @@ async function loadStats() {
 
     let res = await fetchStats(token, targetId);
 
-    // Tepkisel Token Yenileme (401 durumunda)
     if (res.status === 401 && token.refresh_token) {
       const r = await chrome.runtime.sendMessage({ type: "refresh-token" });
       if (r?.ok) {
@@ -300,7 +443,6 @@ async function loadStats() {
       return;
     }
 
-    // Gelen yanıtta user_id varsa kaydet ve göster
     const foundId = json.user_id ?? json.data?.user_id ?? userId;
     if (foundId) {
       await chrome.storage.local.set({ [C.storageKeys.userId]: String(foundId) });
@@ -310,7 +452,7 @@ async function loadStats() {
     }
 
     renderMetrics(json);
-    els.raw.textContent = JSON.stringify(json, null, 2);
+    els.raw.innerHTML = syntaxHighlightJson(json);
     showState({ data: true });
   } catch (e) {
     showState({ error: { title: "Bağlantı hatası", msg: `${e.message}. Sunucu veya ağ bağlantısını kontrol edin.` } });
