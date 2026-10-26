@@ -1,4 +1,7 @@
 importScripts("config.js");
+try {
+  importScripts("config.local.js");
+} catch (_) {}
 
 const C = HIPCALL_CONFIG;
 const PENDING_KEY = "hipcall_pending_auth";
@@ -163,6 +166,12 @@ async function refreshToken() {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     if (msg.type === "login") {
+      if (!C.clientId || C.clientId === "YOUR_CLIENT_ID") {
+        const err = "Client ID tanımlanmamış. Lütfen config.local.js veya config.js dosyasını kontrol edin.";
+        chrome.runtime.sendMessage({ type: "auth-complete", ok: false, error: err }).catch(() => {});
+        sendResponse({ ok: false, error: err });
+        return;
+      }
       let codeVerifier = null;
       let codeChallenge = null;
       if (C.usePKCE) {

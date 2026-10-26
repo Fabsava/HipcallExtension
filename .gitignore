@@ -1,0 +1,7 @@
+# Yerel kimlik bilgileri (Client ID / Ngrok domain)
+config.local.js
+
+# İşletim sistemi ve log dosyaları
+.DS_Store
+Thumbs.db
+*.log
