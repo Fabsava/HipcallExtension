@@ -549,6 +549,49 @@ async function scrapeSiteDataInTab() {
     const phones = new Set();
     let foundAddress = null;
 
+    const bodyText = doc.body ? doc.body.innerText : "";
+
+    function cleanAddress(str) {
+      if (!str) return "";
+      return str
+        .replace(/\s+/g, " ")
+        .replace(/^[iİıI]leti[sş]im\s*[:：\-]?\s*/i, "")
+        .replace(/^(?:bize ulaşın|bize ulasin|ofisimiz|merkez|şube|sube|adres|address)\s*[:：\-]?\s*/i, "")
+        .replace(/^[,\s:：\-]+/, "")
+        .replace(/[,\s:：\-]+$/, "")
+        .trim();
+    }
+
+    function isLikelyAddress(txt) {
+      if (!txt || txt.length < 14 || txt.length > 250) return false;
+      if (txt.includes("@")) return false;
+      if (/^\+?\d[\d\s().-]{7,}$/.test(txt)) return false;
+
+      const lower = txt.toLowerCase();
+      if (/tüm hakları|copyright|privacy|kvkk|çerez|cookie|sayfa|menü|kategori|sepet|giriş yap|kayıt ol|sepete ekle/i.test(lower)) return false;
+
+      const addressTokens = [
+        /\bmh\b|\bmah\b|mahallesi/i,
+        /\bcd\b|\bcad\b|caddesi/i,
+        /\bsk\b|\bsok\b|sokak|sokağı/i,
+        /\bno\s*[:.]?\s*\d+/i,
+        /\bkat\s*[:.]?\s*\d+/i,
+        /\bdaire\s*[:.]?\s*\d+/i,
+        /\bsit\b|\bsitesi\b/i,
+        /\bblv\b|\bbulvar\b|bulvarı/i,
+        /\bplaza\b|\bhan\b|\biş merkezi\b/i,
+        /\bosb\b|\bsan\b|\bsanayi\b/i,
+        /\bpostcode\b|\bposta kodu\b/i,
+        /\b(?:ankara|istanbul|i̇stanbul|izmir|i̇zmir|bursa|antalya|adana|konya|gaziantep|kocaeli|mersin|diyarbakır|hatay|manisa|kayseri|samsun|balıkesir|eskişehir|trabzon|denizli|sakarya|muğla|tekirdağ|aydın|eyüp|yenimahalle|kadıköy|çankaya|şişli|beşiktaş|üsküdar|bakırköy|kartal|pendik|nilüfer|osmangazi|muratpaşa|konak|karşıyaka|bornova|türkiye|turkey)\b/i,
+      ];
+
+      let matches = 0;
+      for (const regex of addressTokens) {
+        if (regex.test(txt)) matches++;
+      }
+      return matches >= 2;
+    }
+
     // 1. Mailto Linkleri (Önce kullanıcının ekranda gördüğü metin taranır, yoksa href alınır)
     doc.querySelectorAll('a[href^="mailto:"]').forEach((a) => {
       const visibleMatch = (a.innerText || a.textContent || "").match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
@@ -581,7 +624,7 @@ async function scrapeSiteDataInTab() {
           if (obj.email && typeof obj.email === "string") emails.add(obj.email.toLowerCase().trim());
           if (obj.telephone && typeof obj.telephone === "string") phones.add(obj.telephone);
           if (obj.address) {
-            if (typeof obj.address === "string") foundAddress = obj.address;
+            if (typeof obj.address === "string") foundAddress = cleanAddress(obj.address);
             else if (typeof obj.address === "object") {
               const parts = [
                 obj.address.streetAddress,
@@ -590,7 +633,7 @@ async function scrapeSiteDataInTab() {
                 obj.address.postalCode,
                 obj.address.addressCountry,
               ].filter(Boolean);
-              if (parts.length > 0) foundAddress = parts.join(", ");
+              if (parts.length > 0) foundAddress = cleanAddress(parts.join(", "));
             }
           }
           Object.values(obj).forEach(findInJson);
@@ -599,18 +642,7 @@ async function scrapeSiteDataInTab() {
       } catch (_) {}
     });
 
-    // 4. HTML5 Address ve Microdata
-    if (!foundAddress) {
-      const addrEl = doc.querySelector("address") || doc.querySelector('[itemprop="address"]');
-      if (addrEl) {
-        const txt = addrEl.innerText.trim().replace(/\s+/g, " ");
-        if (txt.length >= 10 && txt.length < 300) foundAddress = txt;
-      }
-    }
-
-    const bodyText = doc.body ? doc.body.innerText : "";
-
-    // 5. Metin İçi "E-posta:" etiketli alan veya regex taraması
+    // 4. Metin İçi "E-posta:" etiketli alan veya regex taraması
     const labelMatch = bodyText.match(/(?:e-?posta|email|mail)\s*[:：\-]?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
     if (labelMatch && labelMatch[1]) {
       const labeledEmail = labelMatch[1].toLowerCase().trim();
@@ -627,7 +659,7 @@ async function scrapeSiteDataInTab() {
       }
     }
 
-    // 6. Metin İçi Telefon Taraması (TR ve Uluslararası Regex)
+    // 5. Metin İçi Telefon Taraması (TR ve Uluslararası Regex)
     if (phones.size === 0 && bodyText) {
       const phoneMatches = bodyText.match(/(?:\+?90|0)?\s*\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}/g);
       if (phoneMatches) {
@@ -653,13 +685,107 @@ async function scrapeSiteDataInTab() {
       }
     }
 
-    // 7. Footer ve Metin İçi Adres Taraması
+    // 6. HTML5 Address ve Microdata
     if (!foundAddress) {
-      const footer = doc.querySelector("footer") || doc.querySelector("#footer") || doc.querySelector(".footer");
-      const targetText = footer ? footer.innerText : bodyText;
-      const addrMatch = targetText.match(/(?:adres|address)\s*[:：\-]\s*([^\n\r]{12,180})/i);
+      const addrEl = doc.querySelector("address") || doc.querySelector('[itemprop="address"]');
+      if (addrEl) {
+        const txt = cleanAddress(addrEl.innerText);
+        if (txt.length >= 10 && txt.length < 300) foundAddress = txt;
+      }
+    }
+
+    // 7. Doğrudan Adres class/id içeren spesifik elementler
+    if (!foundAddress) {
+      const explicitAddrEls = doc.querySelectorAll('[class*="address"], [class*="adres"], [id*="address"], [id*="adres"]');
+      for (const el of explicitAddrEls) {
+        if (["INPUT", "TEXTAREA", "FORM", "LABEL"].includes(el.tagName)) continue;
+        const txt = cleanAddress(el.innerText);
+        if (isLikelyAddress(txt)) {
+          foundAddress = txt;
+          break;
+        }
+      }
+    }
+
+    // 8. Harita / Konum İkonu (📍) yanındaki adres bloğu
+    if (!foundAddress) {
+      const locIcons = doc.querySelectorAll('i[class*="map"], i[class*="location"], i[class*="pin"], i[class*="geo"], i[class*="marker"], svg[class*="map"], svg[class*="location"], svg[class*="pin"], svg[class*="geo"], svg[class*="marker"], [class*="icon-map"], [class*="icon-location"]');
+      for (const icon of locIcons) {
+        const candidates = [
+          icon.parentElement,
+          icon.closest("p"),
+          icon.closest("li"),
+          icon.closest("div"),
+          icon.closest("a"),
+        ];
+        for (const candidate of candidates) {
+          if (!candidate) continue;
+          const txt = cleanAddress(candidate.innerText);
+          if (isLikelyAddress(txt)) {
+            foundAddress = txt;
+            break;
+          }
+        }
+        if (foundAddress) break;
+      }
+    }
+
+    // 9. Google Maps Linkleri
+    if (!foundAddress) {
+      const mapLinks = doc.querySelectorAll('a[href*="maps.google"], a[href*="maps.app.goo.gl"], a[href*="google.com/maps"]');
+      for (const m of mapLinks) {
+        const txt = cleanAddress(m.innerText || m.textContent);
+        if (isLikelyAddress(txt)) {
+          foundAddress = txt;
+          break;
+        }
+      }
+    }
+
+    // 10. Footer ve İletişim bloklarında adres taraması
+    if (!foundAddress) {
+      const footerAreas = doc.querySelectorAll('footer, [class*="footer"], #footer, [class*="contact"], #contact, [class*="iletisim"]');
+      for (const area of footerAreas) {
+        const elements = area.querySelectorAll("li, p, div, span");
+        for (const el of elements) {
+          if (el.children.length > 5) continue;
+          const txt = cleanAddress(el.innerText);
+          if (isLikelyAddress(txt)) {
+            foundAddress = txt;
+            break;
+          }
+        }
+        if (foundAddress) break;
+      }
+    }
+
+    // 11. Metin İçi "Adres:" etiketli alan veya satır bazlı adres penceresi taraması
+    if (!foundAddress) {
+      const addrMatch = bodyText.match(/(?:adres|address)\s*[:：\-]?\s*([\s\S]{10,200}?)(?=(?:\n\s*\n|telefon|tel:|e-?posta|email|©|copyright|$))/i);
       if (addrMatch && addrMatch[1]) {
-        foundAddress = addrMatch[1].trim();
+        const candidate = cleanAddress(addrMatch[1]);
+        if (isLikelyAddress(candidate)) {
+          foundAddress = candidate;
+        }
+      }
+      
+      if (!foundAddress) {
+        const lines = bodyText.split(/[\r\n]+/)
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0 && !/^[iİıI]leti[sş]im$/i.test(l) && !/^(?:bize ulaşın|bize ulasin|ofisimiz|hakkımızda|bilgi|hızlı bağlantılar)$/i.test(l));
+
+        for (let i = 0; i < lines.length; i++) {
+          for (let len = 4; len >= 1; len--) {
+            if (i + len <= lines.length) {
+              const combined = cleanAddress(lines.slice(i, i + len).join(" "));
+              if (isLikelyAddress(combined)) {
+                foundAddress = combined;
+                break;
+              }
+            }
+          }
+          if (foundAddress) break;
+        }
       }
     }
 
