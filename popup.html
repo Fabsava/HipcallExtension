@@ -31,12 +31,14 @@
 
   <main id="view-app" class="view hidden">
     <section class="card toolbar">
-      <div class="field">
-        <label for="input-user-id">user_id</label>
-        <input id="input-user-id" type="text" placeholder="örn. 12345" autocomplete="off" spellcheck="false" />
+      <div class="user-badge">
+        <span class="user-icon">👤</span>
+        <span id="user-display" class="user-id-text">Kullanıcı #---</span>
       </div>
-      <button id="btn-refresh" class="btn btn-primary">Yenile</button>
-      <button id="btn-logout" class="btn btn-ghost">Çıkış Yap</button>
+      <div class="toolbar-actions">
+        <button id="btn-refresh" class="btn btn-primary">Yenile</button>
+        <button id="btn-logout" class="btn btn-ghost">Çıkış Yap</button>
+      </div>
     </section>
 
     <div id="state-loading" class="state hidden"><div class="spinner"></div><p class="muted">Yükleniyor…</p></div>
@@ -48,7 +50,7 @@
     </div>
 
     <section id="state-data" class="hidden">
-      <div id="metrics" class="grid"></div>
+      <div id="metrics"></div>
       <div class="card raw">
         <button id="btn-toggle-json" class="raw-toggle" aria-expanded="false">
           <span class="chev">▸</span> Raw JSON
