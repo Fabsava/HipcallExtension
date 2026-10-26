@@ -545,20 +545,31 @@ async function scrapeSiteDataInTab() {
   };
 
   function scanDoc(doc) {
-    const emails = new Set();
+    let emails = new Set();
     const phones = new Set();
     let foundAddress = null;
 
-    // 1. Mailto Linkleri
+    // 1. Mailto Linkleri (Önce kullanıcının ekranda gördüğü metin taranır, yoksa href alınır)
     doc.querySelectorAll('a[href^="mailto:"]').forEach((a) => {
-      const email = a.href.replace(/^mailto:/i, "").split("?")[0].trim();
-      if (email && email.includes("@")) emails.add(email);
+      const visibleMatch = (a.innerText || a.textContent || "").match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+      if (visibleMatch) {
+        emails.add(visibleMatch[0].toLowerCase().trim());
+      } else {
+        const email = a.href.replace(/^mailto:/i, "").split("?")[0].trim().toLowerCase();
+        if (email && email.includes("@")) emails.add(email);
+      }
     });
 
-    // 2. Tel Linkleri
+    // 2. Tel Linkleri (Önce ekrandaki biçimli telefon metni, yoksa href alınır)
     doc.querySelectorAll('a[href^="tel:"]').forEach((a) => {
-      const phone = a.href.replace(/^tel:/i, "").trim();
-      if (phone && phone.length >= 7) phones.add(phone);
+      const visiblePhone = (a.innerText || a.textContent || "").trim();
+      const digits = visiblePhone.replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 14) {
+        phones.add(visiblePhone);
+      } else {
+        const phone = a.href.replace(/^tel:/i, "").trim();
+        if (phone && phone.length >= 7) phones.add(phone);
+      }
     });
 
     // 3. Schema.org / JSON-LD
@@ -567,7 +578,7 @@ async function scrapeSiteDataInTab() {
         const json = JSON.parse(script.textContent);
         const findInJson = (obj) => {
           if (!obj || typeof obj !== "object") return;
-          if (obj.email && typeof obj.email === "string") emails.add(obj.email);
+          if (obj.email && typeof obj.email === "string") emails.add(obj.email.toLowerCase().trim());
           if (obj.telephone && typeof obj.telephone === "string") phones.add(obj.telephone);
           if (obj.address) {
             if (typeof obj.address === "string") foundAddress = obj.address;
@@ -599,13 +610,18 @@ async function scrapeSiteDataInTab() {
 
     const bodyText = doc.body ? doc.body.innerText : "";
 
-    // 5. Metin İçi E-posta Taraması (Regex)
-    if (emails.size === 0 && bodyText) {
+    // 5. Metin İçi "E-posta:" etiketli alan veya regex taraması
+    const labelMatch = bodyText.match(/(?:e-?posta|email|mail)\s*[:：\-]?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (labelMatch && labelMatch[1]) {
+      const labeledEmail = labelMatch[1].toLowerCase().trim();
+      emails.delete(labeledEmail);
+      emails = new Set([labeledEmail, ...emails]);
+    } else if (emails.size === 0 && bodyText) {
       const matches = bodyText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
       if (matches) {
         matches.forEach((em) => {
           if (!/\.(png|jpg|jpeg|gif|webp|svg|css|js|woff|woff2)$/i.test(em)) {
-            emails.add(em);
+            emails.add(em.toLowerCase().trim());
           }
         });
       }
